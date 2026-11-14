@@ -1,0 +1,11 @@
+node_modules/
+bun.lock
+bun.lockb
+.npm-tmp-cache/
+.npmrc-local
+
+# 凭据文件是明文（JWT / gateway apiKey / 积分 cookie），绝不能提交
+magpie-credentials.json
+credentials.json
+*.credentials.json
+*.credentials.local.json
