@@ -46,6 +46,7 @@ import {
   claimDaily,
   fetchUserCenter,
 } from './lib/portal.mjs'
+import { importCredentialTexts } from './lib/imported.mjs'
 
 export const PROVIDER = 'teleagent'
 
@@ -142,6 +143,21 @@ export default async function TeleAgentPlugin(input = {}) {
       icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMwMDVhY2MiLz48cGF0aCBkPSJNMjAgNDJWMjJsMjQgMjBWMjIiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI1IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGZpbGw9Im5vbmUiLz48L3N2Zz4=',
       maxConcurrency: 2,
 
+      // ---------------------------------------------------- magpie 的「从文件导入」入口
+      //
+      // magpie 的插件钩子（OpenCode 忽略）：
+      //   auth.import(texts, { signal }) → 每个文件文本解析出的 sign-in 结果数组
+      // 声明后，供应商账号面板会出现「Import accounts from a file…」，
+      // 用户选文件即可，不需要在 Linux 上装桌面端。
+      importFrom: 'Windows/macOS 上导出的 magpie-credentials.json',
+      importFroms: { zh: 'Windows/macOS 上导出的 magpie-credentials.json' },
+      async import(texts, { signal } = {}) {
+        if (signal?.aborted) {
+          throw Object.assign(new Error('导入已取消'), { name: 'AbortError' })
+        }
+        return importCredentialTexts(texts)
+      },
+
       methods: [{
         type: 'api',
         // keyless：不需要用户输入任何东西，点一下就读本机登录态。
@@ -194,6 +210,35 @@ export default async function TeleAgentPlugin(input = {}) {
               expiresAt: diagnosis.expiresAt ?? null,
               daysLeft: diagnosis.daysLeft ?? null,
             },
+          }
+        },
+      }, {
+        // 备选入口：直接粘贴导出文件的内容（单行 JSON）。
+        // magpie 的 api method 里，authorize 拿到的是 prompts 的答案，
+        // 不是 API key 输入框的值，所以这里用一个 text 问题承载整段 JSON。
+        type: 'api',
+        keyless: true,
+        label: '粘贴导出文件内容',
+        placeholder: '把 magpie-credentials.json 的全部内容粘贴到这里',
+        get prompts() {
+          return [{
+            type: 'text',
+            key: 'payload',
+            message: '粘贴凭据文件内容（用导出脚本的 --stdout 生成单行 JSON）',
+          }]
+        },
+        async authorize(inputs) {
+          const payload = typeof inputs?.payload === 'string' ? inputs.payload.trim() : ''
+          if (!payload) return { type: 'failed', error: '没有粘贴任何内容' }
+          const results = importCredentialTexts([payload])
+          const ok = results.filter((r) => r?.type === 'success')
+          if (ok.length === 0) {
+            const why = results.find((r) => r?.type === 'failed')?.error ?? '导入失败'
+            return { type: 'failed', error: String(why).slice(0, 500) }
+          }
+          return {
+            ...ok[0],
+            metadata: { ...ok[0].metadata, importedAccounts: ok.length },
           }
         },
       }],

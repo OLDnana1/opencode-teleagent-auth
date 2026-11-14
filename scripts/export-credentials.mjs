@@ -26,6 +26,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { execFileSync } from 'node:child_process'
 
 import {
   diagnoseCredential,
@@ -40,6 +41,8 @@ import { buildExportedAccount, buildExportDocument } from '../lib/imported.mjs'
 const USAGE = `用法：node scripts/export-credentials.mjs [选项]
 
   -o, --out <文件>        输出路径（默认 ./magpie-credentials.json）
+      --stdout            只把单行 JSON 打到标准输出（给「粘贴」用）
+      --clipboard         把单行 JSON 复制到剪贴板（Windows/macOS/Linux）
       --scope <scope>     只导出指定账号（目录名 v1_public_<userId>）
       --all               导出本机所有可解账号
       --app-path <路径>   TeleAgent 安装目录 / exe / resources / app.asar
@@ -58,10 +61,14 @@ function parseArgs(argv) {
     scope: undefined,
     appPath: undefined,
     appVersion: undefined,
+    stdout: false,
+    clipboard: false,
   }
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
     if (arg === '--out' || arg === '-o') opts.out = path.resolve(argv[++i] ?? '')
+    else if (arg === '--stdout') opts.stdout = true
+    else if (arg === '--clipboard') opts.clipboard = true
     else if (arg === '--scope') opts.scope = argv[++i]
     else if (arg === '--all') opts.all = true
     else if (arg === '--app-path') opts.appPath = argv[++i]
@@ -79,6 +86,17 @@ function fail(message) {
   process.exitCode = 1
 }
 
+/** 纯 ASCII 的 JSON：中文转成 \uXXXX，避免 Windows clip 按 GBK 解码变成乱码 */
+function toAsciiJson(value) {
+  return JSON.stringify(value).replace(/[^\x00-\x7F]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
+}
+
+function copyToClipboard(text) {
+  if (process.platform === 'win32') execFileSync('clip', [], { input: text })
+  else if (process.platform === 'darwin') execFileSync('pbcopy', [], { input: text })
+  else execFileSync('xclip', ['-selection', 'clipboard'], { input: text })
+}
+
 function main() {
   let opts
   try {
@@ -93,6 +111,9 @@ function main() {
     console.log(USAGE)
     return
   }
+
+  // --stdout 时所有日志改走 stderr，stdout 只留那行 JSON（方便管道/复制）
+  if (opts.stdout) console.log = (...args) => console.error(...args)
 
   console.log('TeleAgent 登录态导出（只读本机，不联网）\n')
 
@@ -185,6 +206,25 @@ function main() {
     sourceHome: os.homedir(),
     appVersion,
   })
+
+  if (opts.stdout) {
+    process.stdout.write(`${JSON.stringify(doc)}\n`)
+    console.error(`\n已生成单行 JSON（${JSON.stringify(doc).length} 字符），复制后粘贴到 magpie 的「粘贴导出文件内容」`)
+    return
+  }
+
+  if (opts.clipboard) {
+    try {
+      copyToClipboard(toAsciiJson(doc))
+    } catch (error) {
+      fail(`复制到剪贴板失败：${String(error?.message ?? error)}；改用 --stdout 手动复制`)
+      return
+    }
+    console.log(`\n已复制到剪贴板（${JSON.stringify(doc).length} 字符）`)
+    console.log('打开 magpie → TeleAgent → 登录方式「粘贴导出文件内容」→ Ctrl+V')
+    return
+  }
+
   try {
     fs.mkdirSync(path.dirname(opts.out), { recursive: true })
     fs.writeFileSync(opts.out, `${JSON.stringify(doc, null, 2)}\n`, { mode: 0o600 })

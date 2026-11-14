@@ -52,7 +52,8 @@
 ## 前置条件
 
 1. macOS 或 Windows（0.2.0 起支持 Windows）
-   - **Linux**：走「跨机凭据导入」（0.3.0），在 Windows/macOS 上导出一次即可，
+   - **Linux**：走「跨机凭据导入」（0.3.0）。在 Windows/macOS 上导出一次，
+     然后在 magpie 里 **Import accounts from a file…** 选中导出文件（或粘贴内容），
      不需要在 Linux 上装桌面端 → 见 [docs/LINUX.md](docs/LINUX.md)
 2. TeleAgent 桌面端 **2.7.1 或更高版本**，已安装并**登录**，与 magpie 使用同一个操作系统用户（Linux 导入模式下不需要）
 3. magpie **0.1.684+**（`magpie --version`）；更早的版本模型能用，但积分与签到不跑

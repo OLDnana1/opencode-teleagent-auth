@@ -15,6 +15,7 @@ import {
   credentialFileCandidates,
   diagnoseImported,
   importedScopes,
+  importCredentialTexts,
   parseCredentialFile,
   readImportedPortalAuth,
   resolveImportedAppVersion,
@@ -271,4 +272,65 @@ test('readDeviceMeta 在导入模式下取文件里的指纹', () => {
   const device = readDeviceMeta(home)
   assert.equal(device.deviceId, 'device-abc')
   assert.equal(device.installId, 'install-xyz')
+})
+
+// ------------------------------------------------------------------ magpie 的文件导入入口
+
+test('magpie 导入：解析文本、落盘、立刻能回读', () => {
+  const home = makeHome()
+  const target = path.join(home, 'magpie-credentials.json')
+  const env = { TELEAGENT_CREDENTIAL_FILE: target }
+  const text = JSON.stringify(makeDoc([makeAccount()]))
+
+  const results = importCredentialTexts([text], { home, env })
+  assert.equal(results.length, 1)
+  assert.equal(results[0].type, 'success')
+  assert.equal(results[0].key, 'v1_public_1')
+  assert.equal(results[0].metadata.email, 'user_test')
+  assert.ok(fs.existsSync(target))
+
+  const d = diagnoseImported({ home, env })
+  assert.equal(d.ok, true)
+  assert.equal(d.accountName, 'user_test')
+})
+
+test('magpie 导入：重复导入同一账号只保留一份', () => {
+  const home = makeHome()
+  const target = path.join(home, 'magpie-credentials.json')
+  const env = { TELEAGENT_CREDENTIAL_FILE: target }
+  const text = JSON.stringify(makeDoc([makeAccount()]))
+
+  importCredentialTexts([text], { home, env })
+  importCredentialTexts([text], { home, env })
+
+  const doc = JSON.parse(fs.readFileSync(target, 'utf8'))
+  assert.equal(doc.accounts.length, 1)
+  assert.equal(doc.accounts[0].current, true)
+})
+
+test('magpie 导入：多个文件 / 多个账号合并', () => {
+  const home = makeHome()
+  const target = path.join(home, 'magpie-credentials.json')
+  const env = { TELEAGENT_CREDENTIAL_FILE: target }
+
+  const a = makeAccount({ scope: 'v1_public_a' })
+  const b = makeAccount({ scope: 'v1_public_b' })
+  const results = importCredentialTexts([
+    JSON.stringify(makeDoc([a])),
+    JSON.stringify(makeDoc([b])),
+  ], { home, env })
+
+  assert.equal(results.filter((r) => r.type === 'success').length, 2)
+  const doc = JSON.parse(fs.readFileSync(target, 'utf8'))
+  assert.deepEqual(doc.accounts.map((x) => x.scope).sort(), ['v1_public_a', 'v1_public_b'])
+})
+
+test('magpie 导入：坏 JSON / 错格式 / 空账号都返回 failed', () => {
+  const home = makeHome()
+  const env = { TELEAGENT_CREDENTIAL_FILE: path.join(home, 'x.json') }
+
+  assert.equal(importCredentialTexts(['not json'], { home, env })[0].type, 'failed')
+  assert.equal(importCredentialTexts(['{"format":"x"}'], { home, env })[0].type, 'failed')
+  assert.equal(importCredentialTexts([JSON.stringify(makeDoc([]))], { home, env })[0].type, 'failed')
+  assert.equal(importCredentialTexts([], { home, env })[0].type, 'failed')
 })

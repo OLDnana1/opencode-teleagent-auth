@@ -22,7 +22,37 @@
 
 ## 步骤
 
-### 1. 在 Windows / macOS 上导出
+### 方式 A（推荐）：magpie 网页里直接导入文件
+
+这是最省事的方式，不需要 scp、不需要 `docker cp`。
+
+1. 在 Windows / macOS 上导出（见下面的「导出」小节）
+2. 打开 magpie 网页 → 供应商 TeleAgent 的账号区 → **Import accounts from a file…**
+3. 选中 `magpie-credentials.json`
+4. 导入完成。插件会把账号写进**容器内**的 `~/.config/TeleAgent/magpie-credentials.json`，
+   后续请求从那里读
+
+入口来自 magpie 的插件钩子 `auth.import`（`lib/imported.mjs` 的
+`importCredentialTexts`）：文件在本地解析、校验、落盘，不联网。
+
+### 方式 B：粘贴
+
+1. 本机执行：
+
+```bash
+node scripts/export-credentials.mjs --clipboard
+# 或者 --stdout 手动复制
+```
+
+2. magpie → TeleAgent → 登录方式「**粘贴导出文件内容**」→ `Ctrl+V`
+3. 插件解析后落盘，和方式 A 结果一样
+
+单行 JSON 约 1~2 KB（带积分 cookie）。中文会转成 `\uXXXX` 再进剪贴板，避免
+Windows `clip` 的代码页乱码。
+
+### 方式 C：手动放文件（备用）
+
+#### 1. 在 Windows / macOS 上导出
 
 ```bash
 # 在插件目录里跑（只用本机文件，不联网、不发模型请求）
@@ -44,13 +74,13 @@ node scripts/export-credentials.mjs --all --out ./magpie-credentials.json
 
 `--no-portal` 跳过积分 cookie，`--no-api-key` 跳过网关 key（不推荐）。
 
-### 2. 传到 Linux
+#### 2. 传到 Linux
 
 ```bash
 scp magpie-credentials.json root@<服务器>:/root/magpie/teleagent/magpie-credentials.json
 ```
 
-### 3. 让插件找到文件
+#### 3. 让插件找到文件
 
 按优先级（命中第一个即进入导入模式）：
 
@@ -73,7 +103,7 @@ services:
 
 > `~` 是**容器内**用户的主目录。挂载点要与 `TELEAGENT_CREDENTIAL_FILE` 的路径一致。
 
-### 4. 离线自检
+#### 4. 离线自检
 
 ```bash
 node scripts/verify-import.mjs
@@ -86,7 +116,7 @@ node scripts/verify-import.mjs --file /path/to/magpie-credentials.json
 
 输出 `自检通过` 后再进 magpie。
 
-### 5. 安装并登录
+#### 5. 安装并登录
 
 ```bash
 magpie plugin add /path/to/opencode-teleagent-auth   # 本地目录

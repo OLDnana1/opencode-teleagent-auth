@@ -14,7 +14,12 @@
 - `credential.mjs` / `installation.mjs` / `apikey.mjs` / `portal.mjs`：接入导入模式。
   导入模式下不读钥匙串/DPAPI、不读 `app.asar`、不读本机 SQLite。
 - `scripts/verify-import.mjs`：Linux 侧离线自检（不联网、不发模型请求），检查凭据链与签名。
-- `package.json` 的 `os` 增加 `linux`；新增 `test/imported.test.mjs`（19 项，`node --test`）。
+- 接入 magpie 的 `auth.import` 钩子：供应商账号区出现「Import accounts from a file…」，
+  选中导出文件即可导入——文件在插件里解析、校验、落盘，不需要 scp / docker cp。
+- 新增登录方式「粘贴导出文件内容」：导出脚本支持 `--stdout`（单行 JSON）与
+  `--clipboard`（复制到剪贴板，中文转 `\uXXXX` 防 Windows 代码页乱码），
+  把内容粘贴进 magpie 即可。
+- `package.json` 的 `os` 增加 `linux`；新增 `test/imported.test.mjs`（26 项，`node --test`）。
 - 文档：`docs/LINUX.md`（导出、传输、Docker 挂载、环境变量、排错）。
 - 修复门户 cookie 域匹配：桌面端把 `operationToken` / `operToken` 写在父域
   **`.teleai.com.cn`** 上，旧实现只认 `agent.teleai.com.cn`，导致 Windows/macOS
